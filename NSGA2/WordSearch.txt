@@ -1,0 +1,159 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Database;
+using MoreLinq.Extensions;
+using Nsga2.Objectives;
+using Nsga2.Population;
+using Trading;
+using Utility;
+using Utility.Interfaces;
+// ReSharper disable StringLiteralTypo
+
+namespace Test
+{
+    internal class NewsWordOptimizer : IPopulationEvents
+    {
+        private Dictionary<int, List<Trade>>? _trades;
+        private static readonly char[] Comma = { ',' };
+        private const string CommaStr = ",";
+        
+        private void EvaluateFitness(IEnumerable<Individual> individuals, ISystemConfiguration config)
+        {
+            if (_trades == null)
+            {
+                throw new Exception("null trades collection");
+            }
+            foreach (var individual in individuals)
+            {
+                if (string.IsNullOrEmpty(individual.Expression))
+                {
+                    throw new Exception("null expression");
+                }
+                var words = individual.Expression.Split(Comma, StringSplitOptions.RemoveEmptyEntries).ToList();
+                var overallLiveProfits = Trade.CalculateOverallLiveProfits(config, _trades, t => !t.ContainsNewsWord(words));
+                var sharpe = new Objective(ObjectiveDirection.Maximize, "S", 0, 8, overallLiveProfits.SharpeRatio());
+                var drawDown = new Objective(ObjectiveDirection.Minimize, "D", 0, 20, overallLiveProfits.MaxDrawDownPercent());
+                var profit = new Objective(ObjectiveDirection.Maximize, "P", 0, 200000, overallLiveProfits.Sum());
+                var count = new Objective(ObjectiveDirection.Minimize, "C", 0, 5, words.Count);
+                individual.Objectives = new List<Objective>
+                {
+                    sharpe,
+                    drawDown,
+                    profit,
+                    count
+                };
+            }
+        }
+
+        private static string CreateGrammarDefinition(IEnumerable<string> words)
+        {
+            return @"@<expression> ::= <word>{,<word>}
+                     @<word>       ::= " + string.Join("|", words);
+        }
+
+        //Create a string invariant of ordering of words
+        private static (string, bool) IndividualToSortedString(Individual individual)
+        {
+            if (string.IsNullOrEmpty(individual.Expression))
+            {
+                throw new Exception("null expression");
+            }
+            var ids = individual.Expression.Split(Comma, StringSplitOptions.RemoveEmptyEntries).OrderBy(i => i).ToList();
+            return (string.Join(CommaStr, ids), ids.Count == ids.Distinct().Count());
+        }
+
+        //Take a list of individuals and remove duplicate expressions
+        private static List<Individual> RemoveDuplicates(List<Individual> individuals)
+        {
+            var rv = new List<Individual>();
+            var expressions = new HashSet<string>();
+            foreach (var individual in individuals)
+            {
+                var (orderedExpression, valid) = IndividualToSortedString(individual);
+                if (!valid)
+                {
+                    continue;
+                }
+                if (expressions.Contains(orderedExpression))
+                {
+                    continue;
+                }
+                expressions.Add(orderedExpression);
+                rv.Add(individual);
+            }
+            return rv;
+        }
+
+        public void Optimize(IEnumerable<string> words, ISystemConfiguration config, IReadOnlyCollection<Trade> trades)
+        {
+            //Group by strategy id, order by time
+            _trades = trades.GroupBy(t => t.StrategySetupId).ToDictionary(g => g.Key, g => g.OrderBy(x => x.CloseTime).ToList());
+            //Start optimizing
+            var policy = new DefaultPopulationPolicy(CreateGrammarDefinition(words), 200, 500)
+            {
+                Events = this
+            };
+            var population = new Population(policy, individuals => EvaluateFitness(individuals, config), RemoveDuplicates);
+            population.Run();
+        }
+
+        public void NewGeneration(int generation, Population population, double minutesRemaining, double minutesElapsed)
+        {
+            var front = population.GetFront(1).ToArray();
+            if (!front.Any())
+            {
+                return;
+            }
+            front.ForEach(e => Console.WriteLine($"{e}"));
+            Console.WriteLine($"Fitness (Front 0)   ={Population.FitnessStats(front)}");
+            Console.WriteLine($"Fitness (Population)={Population.FitnessStats(population.GetPopulation())}");
+            Console.WriteLine($"Generation: {generation} took {Math.Round(minutesElapsed, 2)} minutes, {(minutesRemaining < 60 ? Math.Round(minutesRemaining, 1) : Math.Round(minutesRemaining / 60, 2))} {(minutesRemaining < 60 ? "minutes" : "hours")} remain");
+            Console.WriteLine("######################################");
+            using var file = new System.IO.StreamWriter(@"C:\trading\junk\words.txt", false);
+            front.ForEach(e => file.WriteLine($"{e}"));
+        }
+
+        public bool HasConverged(Population population)
+        {
+            return false;
+        }
+
+        public void Convergence(int generation)
+        {
+
+        }
+
+        public void MaxGenerationsReached(int generation, Population population)
+        {
+
+        }
+    }
+
+    internal static class WordSearch
+    {
+        public static void Run(CommandLineOptions options)
+        {
+            using var db = new TradingDatabase("localhost", "Trading", "spaceshiplanding");
+            var config = SystemConfigFactory.Create(db);
+            //Context data comes out of the db in profit order
+            var contextData = db.GetPositionGroupData(options.Server);
+            var trades = contextData.Select(c => new Trade(c)).ToList();
+            //Take the bottom 10% of live trades with news
+            var liveLossesWithNews = trades
+                .Where(t => !string.IsNullOrEmpty(t.AllNews) && t.Profit < 0)
+                .OrderBy(x => x.Profit)
+                .ToList();
+            //Extract the words
+            var words = new Dictionary<string, int>();
+            var extractor = new Trading.News.WordExtractor();
+            liveLossesWithNews.ForEach(l => extractor.ExtractWords(l.AllNews, ref words));
+            var filteredWords = words.Where(e => e.Value > 30).Select(e => e.Key).ToList();
+            Console.WriteLine($"Filtered text to {filteredWords.Count} words");
+            filteredWords.ForEach(w => Console.Write($"{w},"));
+            Console.WriteLine();
+            var op = new NewsWordOptimizer();
+            op.Optimize(filteredWords, config, trades);
+        }
+    }
+}
