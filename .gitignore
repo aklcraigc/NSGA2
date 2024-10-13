@@ -3,3 +3,5 @@
 NSGA2/bin
 NSGA2/obj
 NSGA2/packages
+UnitTests/bin
+UnitTests/obj
