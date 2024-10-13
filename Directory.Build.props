@@ -3,10 +3,8 @@
         <Configurations>Debug;Release;ReleaseNoLogging</Configurations>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <WarningLevel>4</WarningLevel>
-        <LangVersion>8</LangVersion>
         <LangVersion>12.0</LangVersion>
         <TargetFramework>net8.0</TargetFramework>
-        <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
         <Nullable>enable</Nullable>
         <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     </PropertyGroup>
