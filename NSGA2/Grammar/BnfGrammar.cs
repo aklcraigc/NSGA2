@@ -17,8 +17,8 @@ public class BnfGrammar : IGrammar
     public BnfGrammar(string definition)
     {
         var generatedRules = new Dictionary<string, List<string>>();
-        var lines = definition.Split(['@'], StringSplitOptions.RemoveEmptyEntries);
-        foreach (var rules in lines.Select(line => line.Split(["::="], StringSplitOptions.None)))
+        var lines = definition.Split('@', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var rules in lines.Select(line => line.Split("::=", StringSplitOptions.None)))
         {
             var name = rules[0].Trim();
             var options = rules[1].Split('|').Select(r => r.Trim()).ToList();

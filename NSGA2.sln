@@ -9,7 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		Directory.Build.targets = Directory.Build.targets
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nsga2", "NSGA2\Nsga2.csproj", "{A9D5EB93-B45B-4D73-8B25-82453AFCF4D9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NSGA2", "NSGA2\Nsga2.csproj", "{A9D5EB93-B45B-4D73-8B25-82453AFCF4D9}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UnitTests", "UnitTests\UnitTests.csproj", "{809EB364-5C05-4ED2-A2F2-077BDA666534}"
 EndProject
